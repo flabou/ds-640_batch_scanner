@@ -47,11 +47,36 @@ SCANNER_NOT_FOUND = 256
 FEEDER_EMPTY = 1792
 FEEDER_JAMMED = 1536
 
-scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 210 -y 297 --resolution=300 -o {}"
-# scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=yes --resolution=300 -o {}"
-# scan_cmd = "scanimage -d 'brother5:bus2;dev1' -x 155 -y 140 --resolution=600 -o {}"
-tiff_to_pbm_cmd = "magick {0}.tiff -threshold 80% {0}.pbm"
-merge_ocr_cmd = "djvused -e 'select 1; set-txt {0}.djvu.txt; save' {0}.djvu"
+# Document sizes:
+# | Document          | width [mm] | height [mm] |
+# |-------------------+------------+-------------|
+# | A4                |        210 |         297 |
+# | A5                |        148 |         21O |
+# | A6                |        105 |         148 |
+# | A7                |         74 |         105 |
+# | A8                |         52 |          74 |
+# | Carte credit      |         86 |          55 |
+# | Attestation Soins |        106 |         283 |
+#
+# Note that some of these sizes are country-specific. I just like having the common sizes of the documents I scan on hand.
+# There is of course AutoDocumentSize option, but I don't like using it, because it may not be perfect.
+# Whereas a fixed value will always be what is asked (Except for a negligible rounding error, but it will always be the same).
+
+# Uncomment one of these lines comment the others
+scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 210 -y 297 --resolution=300 -o {}" # A4 - Portrait
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 210 -y 148 --resolution=300 -o {}" # A5 - Paysage
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 148 -y 210 --resolution=300 -o {}" # A5 - Portrait
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 148 -y 105 --resolution=300 -o {}" # A6 - Paysage
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 105 -y 148 --resolution=300 -o {}" # A6 - Portrait
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 105 -y 74  --resolution=300 -o {}" # A7 - Paysage
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 74  -y 105 --resolution=300 -o {}" # A7 - Portrait
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 74  -y 52  --resolution=300 -o {}" # A8 - Paysage
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 52  -y 74  --resolution=300 -o {}" # A8 - Portrait
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 86  -y 55  --resolution=300 -o {}" # Carte de credit   - Portrait
+#scan_cmd = "scanimage -d 'brother5:bus2;dev1' --AutoDeskew=yes --AutoDocumentSize=no -x 106 -y 283 --resolution=300 -o {}" # Attestation Soins - Portrait
+
+tiff_to_pbm_cmd = "magick {0}.tiff -threshold 70% {0}.pbm"
+merge_ocr_cmd = "djvused -e 'select 1; set-txt {0}.djvutxt; save' {0}.djvu"
 merge_cmd = "djvm -c {}.djvu *.djvu"
 
 # After a lot of experimentation, I found that the best compression format was 
@@ -91,9 +116,10 @@ while stop == False:
                     hocr_txt = fp.read()
                     djvu_txt = hocr_to_djvutxt(hocr_txt)
                     
-                with open("{}.djvu.txt".format(p), "w") as fp:
+                with open("{}.djvutxt".format(p), "w") as fp:
                     fp.write(djvu_txt)
 
+                print("Adding ocr data to page {}".format(p))
                 os.system(merge_ocr_cmd.format(p))
 
 

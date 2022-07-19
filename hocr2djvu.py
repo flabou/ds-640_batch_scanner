@@ -1,32 +1,48 @@
-"""
-    Converts an hocr file to a file compatible with djvu hidden text
+"""hocr to djvutxt converter
+
+Converts an hocr OCR file to a file compatible with djvu hidden text.
+
+This module can be used as a script from the command line by providing the
+-f argument for the hocr file to convert to a .djvutxt file. It can also 
+be imported to use the hocr_to_djvutxt function which doesn't mannage files
+and simply outputs a string.
 """
 
 import re
 from bs4 import BeautifulSoup
 import bs4
+import os
+import argparse
+import sys
+from pathlib import Path
+from typing import Tuple
 
-def remove_accents(string):
-    """ Not sure if needed"""
-    string = re.sub(r"&quot;", r'\"', string)
-    string = re.sub(r"&#39;", r"'", string)
-    string = re.sub(r"é", r"\\303\\251", string)
-    string = re.sub(r"è", r"\\303\\250", string)
-    string = re.sub(r"—", r"\\342\\200\\224", string)
-    string = re.sub(r"°", r"\\302\\260", string)
-    string = re.sub(r"ç", r"\\303\\247", string)
-    string = re.sub(r"à", r"\\303\\240", string)
-    string = string.strip().rstrip()
 
-    return string
+def path_arg_type(path_str: str) -> Path:
+    """Simple validator for the provided path."""
+    p = Path(path_str)
+    if not p.exists():
+        raise ValueError
 
-def escape_quotes(string):
+    return p
+
+# Argument parser to allow usage from command line
+parser = argparse.ArgumentParser(description='Convert hocr format OCR file to djvutxt format.')
+
+parser.add_argument('--file', '-f', type=path_arg_type,
+                    help="hocr file to convert to djvutxt.")
+
+# Parse arguments from command line
+args = parser.parse_args(sys.argv[1:])
+
+
+def escape_quotes(string: str) -> str:
     return re.sub("\"", r'\"', string)
 
-def escape_escapes(string):
+def escape_escapes(string: str) -> str:
     return re.sub(r"\\", r'\\\\', string)
 
-def get_bbox(string):
+def get_bbox(string: str) -> tuple[int, int , int, int]:
     m = re.search("bbox (\d+) (\d+) (\d+) (\d+)", string)
     xmin = int(m.group(1))
     ymin = int(m.group(2))
@@ -35,76 +51,17 @@ def get_bbox(string):
 
     return (xmin, ymin, xmax, ymax)
 
-def bbox_to_str_flip_y(bbox, page_height):
+def bbox_to_str_flip_y(bbox: tuple[int, int, int, int], page_height: int) -> str:
     (xmin, ymin, xmax, ymax) = bbox
     string = "{} {} {} {}".format(xmin, page_height-ymin, xmax, page_height-ymax)
     return string
 
-def get_bbox_y_flipped(string, page_height):
+def get_bbox_y_flipped(string: str, page_height: int) -> str:
     bbox = get_bbox(string)
     return bbox_to_str_flip_y(bbox, page_height)
 
-def hocr_to_djvutxt_old(string):
-    """ Converts an "hocr" formatted ocr text string to the format compatible
-    with djvu hidden text """
-
-    soup = BeautifulSoup(string, 'html.parser', multi_valued_attributes=None)
-
-    # Filtering functions
-    is_not_NavigableString = lambda a: type(a) != bs4.element.NavigableString
-    is_ocr_page = lambda a: is_not_NavigableString(a) and a['class']  == 'ocr_page'  # page
-    is_ocr_carea = lambda a: is_not_NavigableString(a) and a['class'] == 'ocr_carea' # column
-    is_ocr_par = lambda a: is_not_NavigableString(a) and a['class']   == 'ocr_par'   # paragraph
-    is_ocr_line = lambda a: is_not_NavigableString(a) and a['class']  == 'ocr_line'  # line
-    is_ocrx_word = lambda a: is_not_NavigableString(a) and a['class'] == 'ocrx_word' # word
-    is_ocr_header = lambda a: is_not_NavigableString(a) and a['class'] == 'ocr_header' # region
-
-    string = ""
-    for p in filter(is_ocr_page, soup.body):
-        (p_xmin, p_ymin, p_xmax, p_ymax) = get_bbox(str(p['title']))
-        string += "\n(page {} {} {} {}".format(p_xmin, p_ymin, p_xmax, p_ymax)
-        p_h = p_ymax - p_ymin
-        #string += p['title']
-       
-        for c in filter(is_ocr_carea, p):
-            bbox = get_bbox(str(c['title']))
-            string += "\n (column {}".format(get_bbox_y_flipped(c['title'], p_h))
-            # string += c['title']
-            # string += c.attrs)
-
-            for par in filter(is_ocr_par, c):
-                string += "\n  (para {}".format(get_bbox_y_flipped(par['title'], p_h))
-                # string += par['title']
-                # string += par.attrs)
-
-                for l in filter(is_ocr_line, par):
-                    string += "\n   (line {}".format(get_bbox_y_flipped(l['title'], p_h))
-                    # string += l['title']
-                    # string += l.attrs)
-
-                    for word in filter(is_ocrx_word, l):
-                        string += "\n    (word {} \"{}\"".format(get_bbox_y_flipped(word['title'], p_h), escape_quotes(word.string))
-                        # string += word['title']
-                        string += ")"
-
-                    # Closing line
-                    string += ")"
-                
-                # Closing paragraph
-                string += ")"
-
-            # Closing column
-            string += ")"
-        
-        # Closing page
-        string += ")"
-
-    string = string.strip().rstrip()
-
-    return string
-
-def hocr_to_djvutxt(string):
-    """ Converts an "hocr" formatted ocr text string to the format compatible
+def hocr_to_djvutxt(string: str) -> str:
+    """Converts an hocr formatted OCR text string to the format compatible
     with djvu hidden text """
 
     soup = BeautifulSoup(string, 'html.parser', multi_valued_attributes=None)
@@ -164,18 +121,12 @@ def hocr_to_djvutxt(string):
 
     return string[0]
 
+if args.file:
+    with open(args.file) as fp:
+        s = fp.readlines()
+        input_s = "".join(s)
+    
+    output_s = hocr_to_djvutxt(input_s)
 
-
-if __name__ == "__main__":
-    input_file_stem = "3"
-
-    with open(input_file_stem + ".hocr") as fp:
-        data = fp.read()
-
-    string = hocr_to_djvutxt(data)
-
-# string = remove_accents(string)
-    print(string)
-
-    with open(input_file_stem + ".djvu.txt", "w") as fp:
-        fp.write(string)
+    with open(args.file.with_suffix(".djvutxt"), "w") as fp:
+        fp.write(output_s)
